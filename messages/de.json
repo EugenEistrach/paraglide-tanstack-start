@@ -1,0 +1,5 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "hello": "Hallo, Welt!",
+  "some_flat_other_key": "Hey ${name}, wie geht's?"
+}
