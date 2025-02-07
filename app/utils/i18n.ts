@@ -1,108 +1,85 @@
-import { createServerFn } from '@tanstack/start'
+import { createServerFn } from "@tanstack/start";
 import {
-	type AvailableLanguageTag,
-	availableLanguageTags,
-  setLanguageTag,
-} from '../paraglide/runtime'
-import { getWebRequest, setCookie } from '@tanstack/start/server'
-import { redirect } from '@tanstack/react-router'
+  type AvailableLanguageTag,
+  availableLanguageTags,
+} from "../paraglide/runtime";
+import { getWebRequest, setCookie } from "@tanstack/start/server";
+import { useMatch, useRouter } from "@tanstack/react-router";
 
-export const DEFAULT_LANGUAGE: AvailableLanguageTag = "en"
+export const DEFAULT_LANGUAGE: AvailableLanguageTag = "en";
 
-export const applyLanguageOnClient = () => {
-  const languageFromCookie = readLanguageFromCookie()
-
-  if (languageFromCookie && isSupportedLanguage(languageFromCookie)) {
-    setLanguageTag(() => normalizeLanguage(languageFromCookie))
+export const readLanguageFromHtmlLangAttribute = () => {
+  const language = document.documentElement.lang;
+  if (isSupportedLanguage(language)) {
+    return language;
   }
-}
+  return DEFAULT_LANGUAGE;
+};
 
-export const applyLanguageOnServer = (request: Request) => {
-  const cookieLanguage = readLanguageFromRequest(request)
+export const getLanguageFromRequest = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const request = getWebRequest();
+    if (!request) return DEFAULT_LANGUAGE;
 
-  // if we have cookie we take from there
-  if (cookieLanguage && isSupportedLanguage(cookieLanguage)) {
-    // providing a callback here so this will be re-evaluated on demand
-    const lang = normalizeLanguage(cookieLanguage)
-    setLanguageTag(() => lang)
-    return lang
-  }
+    const cookie = request.headers.get("cookie");
+    const cookieLanguage = cookie
+      ?.split("; ")
+      .find((row: string) => row.startsWith("language="));
+    const language = cookieLanguage?.split("=")[1];
 
-  // otherwise we check for the accept-language header
-  if (!cookieLanguage) {
-    const acceptLanguage = request?.headers.get('accept-language')
-    if (acceptLanguage && isSupportedLanguage(acceptLanguage)) {
-      const lang = normalizeLanguage(acceptLanguage)
-      setLanguageTag(() => lang)
-      return lang
+    // if we have cookie language we take from there
+    if (language && isSupportedLanguage(language)) {
+      return language;
     }
+
+    // Parse accept-language header if no valid cookie language
+    const acceptLanguage = request?.headers.get("accept-language");
+    if (acceptLanguage) {
+      // Split into individual language tags and their quality values
+      const languages = acceptLanguage.split(",").map((lang) => {
+        const [tag, quality = "q=1"] = lang.trim().split(";");
+        return {
+          tag: tag.trim(),
+          quality: parseFloat(quality.split("=")[1]),
+        };
+      });
+
+      // Sort by quality value
+      languages.sort((a, b) => b.quality - a.quality);
+
+      // Find the first supported language
+      for (const { tag } of languages) {
+        if (isSupportedLanguage(tag)) {
+          return tag;
+        }
+      }
+    }
+
+    // or we fallback to the default language
+    return DEFAULT_LANGUAGE;
   }
+);
 
-   // or we fallback to the default language
-  setLanguageTag(() => DEFAULT_LANGUAGE)
-  return DEFAULT_LANGUAGE
-}
+const setLanguage = createServerFn({ method: "POST" })
+  .validator((data: { locale: string }) => data)
+  .handler(async ({ data: { locale } }) => {
+    setCookie("language", locale);
+  });
 
-export const updateLocale = createServerFn({ method: 'POST' })
-	.validator((data: { locale: string }) => data)
-	.handler(async ({ data: { locale } }) => {
-
-    const request = getWebRequest()
-
-    const referrer = request?.headers.get('referer') ?? '/'
-
-		setCookie('language', locale)
-	})
-
-
+export const useLanguage = () => {
+  const router = useRouter();
+  const match = useMatch({ from: "__root__" });
+  const language = match?.context.language ?? DEFAULT_LANGUAGE;
+  const setLanguageFn = async (language: AvailableLanguageTag) => {
+    await setLanguage({ data: { locale: language } });
+    await router.invalidate();
+  };
+  return [language, setLanguageFn] as const;
+};
 
 const isSupportedLanguage = (
-	language: string | null | undefined,
+  language: string | null | undefined
 ): language is AvailableLanguageTag => {
-	if (!language) return false
-
-	if (availableLanguageTags.includes(language as any)) {
-		return true
-	}
-
-	const [baseLanguage] = language.split('-')
-	if (!baseLanguage) return false
-
-	return availableLanguageTags.includes(baseLanguage.toLowerCase() as any)
-}
-
-
-// Translate more complex language tags to the base language e.g. en-US -> en
-// Fallback to default language if the language is not supported
-const normalizeLanguage = (
-	language: string | null | undefined,
-): AvailableLanguageTag => {
-	if (!language) return DEFAULT_LANGUAGE
-
-	if (availableLanguageTags.includes(language as any)) {
-		return language as AvailableLanguageTag
-	}
-
-	const [baseLanguage] = language.split('-')
-	if (!baseLanguage) return DEFAULT_LANGUAGE
-
-	const normalizedBase = baseLanguage.toLowerCase()
-	if (availableLanguageTags.includes(normalizedBase as any)) {
-		return normalizedBase as AvailableLanguageTag
-	}
-
-	return DEFAULT_LANGUAGE
-}
-
-const readLanguageFromCookie = () => {
-  const cookie = document.cookie
-  const language = cookie.split('; ').find(row => row.startsWith('language='))
-  return language ? language.split('=')[1] : DEFAULT_LANGUAGE
-}
-
-const readLanguageFromRequest = (request: Request) => {
-  if (!request) return null
-  const cookie = request.headers.get('cookie')
-  const language = cookie?.split('; ').find((row: string) => row.startsWith('language='))
-  return language ? language.split('=')[1] : null
-}
+  if (!language) return false;
+  return availableLanguageTags.includes(language.trim() as any);
+};
