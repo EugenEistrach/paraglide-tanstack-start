@@ -6,6 +6,8 @@ import { DefaultCatchBoundary } from '~/components/DefaultCatchBoundary'
 import { NotFound } from '~/components/NotFound'
 import appCss from '~/styles/app.css?url'
 import { seo } from '~/utils/seo'
+import {  languageTag } from '../paraglide/runtime'
+
 
 export const Route = createRootRoute({
   head: () => ({
@@ -66,8 +68,9 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  const locale =  languageTag()
   return (
-    <html>
+    <html lang={locale}>
       <head>
         <Meta />
       </head>

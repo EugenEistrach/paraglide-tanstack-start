@@ -1,5 +1,8 @@
 {
-  "$schema": "https://inlang.com/schema/inlang-message-format",
-  "hello": "Hello, world!",
-  "some_flat_other_key": "Hey ${name}, how are you?"
+	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"hello": "Hello, world!",
+	"some_flat_other_key": "Hey {name}, how are you?",
+	"identical_text": "Same text in both languages",
+	"bad_translation": "This is a bad translation",
+	"not_snake_case": "some english translation"
 }
